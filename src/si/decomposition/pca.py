@@ -1,3 +1,5 @@
+print("PCA module loaded successfully.")
+
 import numpy as np
 
 class PCA:
