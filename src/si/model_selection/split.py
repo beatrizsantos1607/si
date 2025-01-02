@@ -1,7 +1,5 @@
 from typing import Tuple
-
 import numpy as np
-
 from si.data.dataset import Dataset
 
 
@@ -43,51 +41,54 @@ def train_test_split(dataset: Dataset, test_size: float = 0.2, random_state: int
     return train, test
 
 def stratified_train_test_split(dataset: Dataset, test_size: float = 0.2, random_state: int = 42) -> Tuple[Dataset, Dataset]:
+
     """
-    Perform stratified splitting of the dataset into training and testing sets.
+    Splits the dataset into training and testing sets while preserving the class distribution in each subset.
 
     Parameters
     ----------
     dataset: Dataset
-        The dataset to split
+        - Dataset object to split
     test_size: float
-        The proportion of the dataset to include in the test split
+        - Size of the test set. By default, 20%
     random_state: int
-        The seed of the random number generator
-
+        - Random seed for reproducibility
+    
     Returns
     -------
-    train: Dataset
-        The training dataset
-    test: Dataset
-        The testing dataset
+    Tuple[Dataset, Dataset]
+        - A tuple where the first element is the training dataset and the second element is the testing dataset
+
+    Raises
+    -------
+    ValueError
+        - If test_size is not a float between 0 and 1
+    
     """
-    # Set random state
+
+    if test_size <0 or test_size > 1:
+        raise ValueError("Test size must be between 0 and 1")
+    
+    # set random state
     np.random.seed(random_state)
 
-    # Get unique classes and their counts
-    unique_classes, class_counts = np.unique(dataset.y, return_counts=True)
-    train_indices = []
-    test_indices = []
+    # get unique labels
+    labels,counts = np.unique(dataset.y, return_counts= True)
 
-    # Loop through each unique class
-    for cls, count in zip(unique_classes, class_counts):
-        # Get indices of the current class
-        cls_indices = np.where(dataset.y == cls)[0]
-        # Shuffle indices
-        np.random.shuffle(cls_indices)
-        # Calculate the number of test samples for the current class
-        n_test = int(count * test_size)
-        # Split into test and train indices
-        test_indices.extend(cls_indices[:n_test])
-        train_indices.extend(cls_indices[n_test:])
+    # initialize empty lists to store indices for training and testing sets
+    train_idx = []
+    test_idx = []
 
-    # Shuffle the final train and test indices
-    np.random.shuffle(train_indices)
-    np.random.shuffle(test_indices)
+    # spliting the data based on the labels
+    for label,count in zip(labels,counts):
 
-    # Create the train and test datasets
-    train = Dataset(dataset.X[train_indices], dataset.y[train_indices], features=dataset.features, label=dataset.label)
-    test = Dataset(dataset.X[test_indices], dataset.y[test_indices], features=dataset.features, label=dataset.label)
+        idx = np.where(dataset.y == label)[0]
+        train_size = int(count * (1 - test_size))
+        np.random.shuffle(idx)
+        train_idx.extend(idx[:train_size])
+        test_idx.extend(idx[train_size:])       
 
-    return train, test
+    train_dataset = Dataset(X=dataset.X[train_idx,:], y= dataset.y[train_idx], features= dataset.features, label= dataset.label)
+    test_dataset = Dataset( X = dataset.X[test_idx,:], y= dataset.y[test_idx], features= dataset.features, label= dataset.label)    
+
+    return train_dataset, test_dataset

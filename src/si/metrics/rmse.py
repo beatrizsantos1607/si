@@ -1,19 +1,23 @@
-import numpy as np 
+import numpy as np
 
-def rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+
+def rmse(y_true:np.ndarray, y_pred: np.ndarray) -> float:
+
     """
-    Calculate the Root Mean Squared Error (RMSE).
-
+    Calculates the Root Mean Squared Error (RMSE) between the true values and predicted values.
+    
     Parameters
     ----------
     y_true: np.ndarray
-        The true labels
+        - An array containing the true values of the label
+    
     y_pred: np.ndarray
-        The predicted labels
+        - An array containing the predicted values for the label
 
     Returns
     -------
-    rmse: float
-        The root mean squared error
+    float
+        - The RMSE value between the true and predicted values
     """
-    return np.sqrt(np.mean((y_true - y_pred) ** 2))
+    
+    return np.sqrt(np.sum((y_true - y_pred) ** 2) / len(y_true))

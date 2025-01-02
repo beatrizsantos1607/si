@@ -1,74 +1,120 @@
-print("PCA module loaded successfully.")
-
 import numpy as np
+from si.base.transformer import Transformer
+from si.data.dataset import Dataset
 
-class PCA:
-    def __init__(self, n_components):
-        """
-        Inicializa a classe PCA.
 
-        Parâmetros:
-        - n_components: int
-            Número de componentes principais a serem mantidos.
+class PCA(Transformer):
+
+    def __init__(self, n_components, **kwargs):
         """
+        Principal Component Analysis (PCA)
+
+        Parameters
+        ----------
+        n_components: int
+            Number of components.
+        """
+        super().__init__(**kwargs)
         self.n_components = n_components
+        self.is_fitted = False
         self.mean = None
+        self.covariance = None
+        self.e_values = None
         self.components = None
         self.explained_variance = None
-
-    def _fit(self, X):
+        self.e_vectores = None
+    
+    def _fit(self, dataset:Dataset) -> "PCA":
         """
-        Ajusta o modelo PCA aos dados.
+        Estimates the mean, principal componentes and the explained variance.
 
-        Parâmetros:
-        - X: numpy.ndarray
-            Dados de entrada com forma (n_amostras, n_features).
+        Parameters
+        ----------
+        dataset: Dataset
+            Dataset object used to estimate the PCA parameters.
+
+        Returns
+        -------
+        self: PCA
+
+        Raises
+        -------
+        ValueError;
+            If n_componets is 0 or greater than the number of features.
         """
-        # 1. Centralizar os dados
-        self.mean = np.mean(X, axis=0)
-        X_centered = X - self.mean
 
-        # 2. Calcular a matriz de covariância
-        cov_matrix = np.cov(X_centered, rowvar=False)
+        if self.n_components == 0 or self.n_components> dataset.shape()[1]:
+            raise ValueError("n_components must be a positive integer less than or equal to the number of features.")
 
-        # 3. Decomposição em valores e vetores próprios
-        eigenvalues, eigenvectors = np.linalg.eigh(cov_matrix)
+        # centering the data
+        self.mean = dataset.get_mean()
+        dataset.X = dataset.X - self.mean
 
-        # 4. Ordenar os valores/vetores próprios em ordem decrescente
-        sorted_indices = np.argsort(eigenvalues)[::-1]
-        eigenvalues = eigenvalues[sorted_indices]
-        eigenvectors = eigenvectors[:, sorted_indices]
 
-        # 5. Selecionar os n_components principais
-        self.components = eigenvectors[:, :self.n_components]
-        self.explained_variance = eigenvalues[:self.n_components]
+        # computing the covariance matrix of the centered data and eigenvalue decomposition on the covariance matrix
+        # rowvar = False ensures that the columns of the dataset are intrepreted as variables
+        self.covariance = np.cov(dataset.X, rowvar= False)
+        self.e_values, self.e_vectores = np.linalg.eig(self.covariance)
+        # garantees real eigenvalues since numerical approximations or rounding errors can lead to complex eigenvalues on a real valued covariance matrix
+        self.e_values = np.real(self.e_values)
 
-    def _transform(self, X):
+
+        # infer the principal components, sorting them by descending order of eigenvalues
+        principal_components_idx = np.argsort(self.e_values) [-self.n_components:][::-1]
+        
+
+        # Infer the explained variance
+        self.explained_variance = self.e_values[principal_components_idx] / np.sum(self.e_values)
+        self.components = self.e_vectores[:, principal_components_idx].T
+
+        self.is_fitted = True
+
+        return self
+        
+
+    def _transform(self, dataset:Dataset)-> Dataset:
         """
-        Transforma os dados para as dimensões reduzidas.
+        Tranforms the intended dataset to the principal components.
 
-        Parâmetros:
-        - X: numpy.ndarray
-            Dados de entrada com forma (n_amostras, n_features).
-
-        Retorna:
-        - X_reduced: numpy.ndarray
-            Dados transformados com dimensões reduzidas.
+        Parameters
+        ----------
+        dataset: Dataset
+            Dataset object to be transformed.
+        
+        Returns
+        -------
+        Dataset
+            Dataset object with the transformed features.        
         """
-        X_centered = X - self.mean
-        return np.dot(X_centered, self.components)
 
-    def fit_transform(self, X):
+        # centering the dataset
+        X_centered = dataset.X - self.mean
+
+        # reducing the dataset to the principal components
+        X_reduced = np.dot(X_centered, self.components.T)
+
+        return Dataset(X_reduced, y= dataset.y, features=[f"PC{i+1}" for i in range(self.n_components)], label= dataset.label)
+    
+    def get_covariance(self)-> np.ndarray:
         """
-        Ajusta o modelo PCA e transforma os dados.
+        Retunrs the covariance matrix of the centered data.
 
-        Parâmetros:
-        - X: numpy.ndarray
-            Dados de entrada com forma (n_amostras, n_features).
+        Returns
+        -------
+        np.ndarray
+            - Covariance matrix
 
-        Retorna:
-        - X_reduced: numpy.ndarray
-            Dados transformados com dimensões reduzidas.
+        Raises
+        -------
+        ValueError
+            - If PCA has not been fitted to your data.
         """
-        self._fit(X)
-        return self._transform(X)
+
+        if not self.is_fitted:
+            raise ValueError("PCA has not been fitted to your data.")
+        
+        else:
+            return self.covariance
+
+
+        

@@ -126,7 +126,7 @@ class Dataset:
         }
         return pd.DataFrame.from_dict(data, orient="index", columns=self.features)
 
-    @classmethod
+
     def from_dataframe(cls, df: pd.DataFrame, label: str = None):
         """
         Creates a Dataset object from a pandas DataFrame
@@ -197,6 +197,71 @@ class Dataset:
         X = np.random.rand(n_samples, n_features)
         y = np.random.randint(0, n_classes, n_samples)
         return cls(X, y, features=features, label=label)
+    
+    def dropna(self):
+        """
+        Removes rows containing null values (NaNs) from the dataset.
+
+        Returns:
+            The updated Dataset object with rows containing null values removed.
+        """
+        mask = np.any(np.isnan(self.X), axis=1)
+        self.X = self.X[~mask]
+        self.y = self.y[~mask]
+
+        return self
+    
+    def fillna(self,value:float|str):
+        """
+        Fills missing values (NaNs) in the dataset with a specified value or statistic.
+
+        Parameters
+        ----------
+        value (float|str): The value or statistic to fill NaNs with.
+            - If a float or integer, fills all NaNs with that value.
+            - If "MEAN", fills NaNs with the column-wise mean.
+            - If "MEDIAN", fills NaNs with the column-wise median.
+
+        Returns
+        ----------
+        The updated Dataset object with missing values filled.
+        """
+
+        if isinstance(value,float|int):
+            self.X[np.where(np.isnan(self.X))] = value
+
+        elif isinstance(value,str) and value.upper() == "MEAN":
+            row_idx,col_idx= np.where(np.isnan(self.X))
+            means = self.get_mean()
+                
+            for row,col in zip(row_idx,col_idx):
+                self.X[row,col] = means[col]
+
+        else:
+            row_idx,col_idx= np.where(np.isnan(self.X))
+            medians = self.get_median()
+
+            for row,col in zip(row_idx,col_idx):
+                self.X[row,col] = medians[col]
+        
+        return self
+    
+    def remove_by_index(self,index:int):
+        """
+        Remove a samplpe by it's
+
+        Parameters
+        ----------
+        index: int
+            The sample to remove. The index start on the sample 0 
+        
+        Returns:
+        -----------
+        The updated Dataset object with the specified sample removed.
+        """
+        self.X = np.delete(self.X, index, 0)
+        self.y = np.delete(self.y, index)
+        return self
 
 
 if __name__ == '__main__':
@@ -214,3 +279,48 @@ if __name__ == '__main__':
     print(dataset.get_min())
     print(dataset.get_max())
     print(dataset.summary())
+    print(dataset.X)
+    print(dataset.y)
+
+    print("\n--------------------------")
+    print("**Drop Nan example**\n")
+
+
+    X = np.array([[1, 2, np.nan],
+                  [3, 4, 5],
+                  [np.nan, 6, 7]])
+    y = np.array([10, 20, 30])
+    dataset = Dataset(X, y,label="Y")
+    print("Features values with missing values:\n",dataset.X)
+    print("Lables with missing values:",dataset.y)
+    print("Shape of X with missing values:",dataset.X.shape)
+    print("Shape of Y with missing values:",dataset.y.shape)
+    dataset = dataset.dropna()
+    print("Shape of X without missing values:",dataset.X.shape)
+    print("Shape of y without missing values:",dataset.y.shape)
+    print("Features values without missing values:\n",dataset.X)
+    print("Labels without missing values:",dataset.y)
+
+
+    print("\n--------------------------")
+    print("**Fill Nan example**\n")
+    X = np.array([[30, 2, np.nan],
+                  [3, 4, 5],
+                  [np.nan, 6, 7]])
+    y = np.array([10, 20, 30])
+    dataset= Dataset(X, y)
+    print(dataset.X)
+    print("Median:",dataset.get_median())
+    dataset_median = dataset.fillna(value="median")
+    print("Features values with missing values equal to the mean:\n",dataset_median.X)
+
+    print("\n--------------------------")
+    print("**Remove sample by index**\n")
+    X = np.array([[30, 2, np.nan],
+                  [3, 4, 5],
+                  [np.nan, 6, 7]])
+    y = np.array([10, 20, 30])
+    dataset= Dataset(X, y)
+    print(dataset.X)
+    dataset_ = dataset.remove_by_index(index= 1)
+    print("\n",dataset.X)
