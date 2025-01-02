@@ -115,6 +115,3 @@ class PCA(Transformer):
         
         else:
             return self.covariance
-
-
-        

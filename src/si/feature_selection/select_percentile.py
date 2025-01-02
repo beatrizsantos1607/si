@@ -1,80 +1,108 @@
+import sys
+import os
 import numpy as np
+import pandas as pd
+sys.path.append("/Users/utilizador/Documents/GitHub/si/src")
+
 from si.base.transformer import Transformer
 from si.data.dataset import Dataset
-from si.statistics import f_classification
+from si.statistics.f_classification import f_classification
+from si.io.csv_file import read_csv
+
 
 
 class SelectPercentile(Transformer):
     
-    def __init__(self, percentile:float, score_func:callable = f_classification,**kwargs):
-        """
-        Selects features from the given percentile of a score function and returns a new Dataset object with the selected features
+    """
+    Select a certain percentage of the features taking into account the F-score value.
+    this is first we see the f-score of each feature and sorted that.
+    after we choose a percentil that representes x % of this f-values sorted
+    so we keep the features that indices have the f-value <= to the percentile
+    
+    Parameters
+    -----------
+    score_func:callable 
+        taking the dataset and return a pair os array (F and p value)- allow analize the variance 
+    percentile: int, deafult 50
+        number that represents a percentage of the data/features to select 
 
-        Parameters
-        ----------
-        percentile: float
-            Percentile for selecting features
-        
-        score_func: callable, optional
-            Variance analysis function. Use the f_classification by default for
-        """
-        super().__init__(**kwargs)
-        if isinstance(percentile,int):
-            self.percentile = percentile
-        else:
-            raise ValueError("Percentile must be a integer between 0 and 100")
+    estimated parameters(given by the score_func)
+    ---------------
+    F: array, shape (n_features,)
+        F scores of features.
+    p: array, shape (n_features,)
+        p-values of F-scores.
+    """
+    
+    def __init__(self, score_func: callable= f_classification, percentile:int =50):
         self.score_func = score_func
-        self.F = None
-        self.p = None
-
-    def _fit(self,dataset:Dataset) -> 'SelectPercentile':
-
+        self.percentile = percentile
+        self.F= None
+        self.p= None
+    
+        if self.percentile > 100 or self.percentile < 0:
+            raise ValueError("the value of percentile must be between 0 and 100")
+    
+    def _fit(self, dataset: Dataset):
         """
-        Estimate the F and P values for each feature using the scoring function
-
+        It fits SelectPercentile to compute the F scores and p-values.
+        
         Parameters
         ----------
         dataset: Dataset
-            - Dataset object where is intended to select features
-        
-        Returns
-        ----------
-        self: object
-            - Returns self instance with the F and P values for each feature calculated using the scoring function.
-        """
+            A labeled dataset
 
-        self.F,self.p = self.score_func(dataset)
+        Returns
+        -------
+        self: object
+            Returns self.
+        """
+        
+        self.F, self.p = self.score_func(dataset)
         
         return self
     
     def _transform(self, dataset: Dataset) -> Dataset:
+        
         """
-        Selects features with the highest F value up to the specified percentile
-
+        It selects the features according to the percentile.
+        
         Parameters
         ----------
         dataset: Dataset
-            - Dataset object where is intended to select features
+            A labeled dataset
         
         Returns
         ----------
         dataset: Dataset
-            - A new Dataset object with the selected features
-        
+            A labeled dataset with the selected features.
+            
         """
-        # calculates the threshold for the scores
-        threshold= np.percentile(self.F,100-self.percentile)
-        # select the features with score higher than threshold
-        mask = self.F > threshold
-        # check if there is features with the same score as the threshold, the function where always returns two arrays but just the first one is necessary
-        ties = np.where(self.F == threshold)[0]
-        if len(ties) != 0:
-            # calculates the maximum number of features to keep based on the given percentile
-            max_features = int (len(self.F)*self.percentile/100)
-            # select the ties that must integrate the features
-            # changes the value of these features to True in the mask
-            mask[ties[: max_features -mask.sum()]] = True
-
-        features = np.array(dataset.features)[mask]
         
-        return Dataset(X=dataset.X[:, mask], y=dataset.y, features=list(features), label=dataset.label)
+        percentile = np.percentile(self.F, self.percentile) # vai buscar o percentile do f values
+        
+        idxs = np.where(self.F > percentile)[0] # vai buscar os indices das features que tem f values
+
+        features = np.array(dataset.features)[self.F > percentile] #vai buscar o nome das features
+        
+        return Dataset(X=dataset.X[:, idxs], y=dataset.y, features=features, label=dataset.label)
+        
+        
+    def fit_transform(self, dataset: Dataset) -> Dataset:
+        """
+        It fits SelectPercentile to compute the F scores and p-values and then selects the features according to the percentile.
+        
+        Parameters
+        ----------
+        dataset: Dataset
+            A labeled dataset
+        
+        Returns
+        ----------
+        dataset: Dataset
+            A labeled dataset with the selected features.
+            
+        """
+        
+        self.fit(dataset)
+        return self.transform(dataset)

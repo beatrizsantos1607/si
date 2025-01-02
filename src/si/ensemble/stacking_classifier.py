@@ -5,96 +5,81 @@ from si.base.model import Model
 
 
 class StackingClassifier(Model):
-    def __init__(self, models:list, final_model,**kwargs):
+    def __init__(self, models, final_model):
         """
-        Initialize the Stacking Classifier ensemble model
+        Initializes the StackingClassifier with an initial set of models and a final model.
 
-        Parameters
-        ----------
-        models : list
-            Array-like of base models to be combined in the ensemble.
-            Each model should be an instance of a Model class.
-        final_model :
-            Model to be used as the meta-model and create the final predictions.
-            The model must be an instance of a Model class
+        Parameters:
+        - models: list of Model
+            The initial set of models to generate predictions.
+        - final_model: Model
+            The final model that will make the final predictions based on the outputs of the initial models.
         """
-        
-        # parameters
-        super().__init__(**kwargs)
         self.models = models
         self.final_model = final_model
 
-        # attributes
-        self.new_dataset = None
-    
-    def _fit(self, dataset: Dataset) -> 'StackingClassifier':
+    def _fit(self, dataset: Dataset):
         """
-        Fit the StackingClassifier ensemble model to the given training data.
+        Trains the ensemble models and the final model.
 
-        Parameters
-        ----------
-        dataset : Dataset
-            The dataset to fit the model to (training dataset)
+        Parameters:
+        - dataset: Dataset
+            The dataset containing the features (X) and labels (y).
 
-        Returns
-        -------
-        self : StackingClassifier
-            The fitted model
+        Returns:
+        - self: StackingClassifier
+            The trained StackingClassifier.
         """
-        # Fit the base models
+      
+        predictions = []
         for model in self.models:
-            model.fit(dataset)
-
-        # Genarate the base models predictions
-        base_predictions = [model.predict(dataset) for model in self.models]
-        base_predictions = np.array(base_predictions).T
-
-        # Create a new dataset with the base models predictions
-        self.new_dataset = Dataset(X=base_predictions, y=dataset.y, features = [f"{model}" for model in self.models] ,label= dataset.label)
+            model._fit(dataset) # Ajusta o modelo base com o dataset
+            predictions.append(model._predict(dataset))
         
-        # Fit the final model (meta-model)
-        self.final_model.fit(self.new_dataset)
-
+        # Combina as predições dos modelos base em um novo conjunto de dados
+        predictions = np.column_stack(predictions)
+        final_dataset = Dataset(predictions, dataset.y)
+        
+        # Train the final model
+        self.final_model._fit(final_dataset)
+        
         return self
-    
-    def _predict(self, dataset:Dataset) -> np.ndarray:
+
+    def _predict(self, dataset: Dataset) -> np.ndarray:
         """
-        Predict class labels for samples in X.
+        Predicts the labels using the ensemble models and the final model.
 
-        Parameters
-        ----------
-        dataset : Dataset
-            The dataset to make predictions on
+        Parameters:
+        - dataset: Dataset
+            The dataset containing the features (X).
 
-        Returns
-        -------
-        np.ndarray
-            The predicted class labels for the samples in X
+        Returns:
+        - predictions: np.ndarray
+            The predicted labels.
         """
-        # Base models predictions
-        base_predictions = [model.predict(dataset) for model in self.models]
-        base_predictions = np.array(base_predictions).T
-
-        # Create a new dataset with the base models predictions
-        new_dataset = Dataset(X=base_predictions, y=dataset.y, features = [f"{model}" for model in self.models] ,label=dataset.label)
         
-        # Make predictions with the final model (meta-model)
-        return self.final_model.predict(new_dataset)
-    
-    def _score(self, dataset: Dataset, predictions: np.ndarray) -> float:
-        """
-        Returns the mean accuracy on the given test data and labels.
+        predictions = []
+        for model in self.models:
+            predictions.append(model._predict(dataset))
+        
+         # Combina as predições dos modelos base em um novo conjunto de dados
+        predictions = np.column_stack(predictions)
+        
+        
+        final_dataset = Dataset(predictions, None)  # Faz predições finais usando o modelo final
+        return self.final_model._predict(final_dataset)
 
-        Parameters
-        ----------
-        dataset : Dataset
-            The test data.
-        predictions: np.ndarray
-            Predictions
-
-        Returns
-        -------
-        score : float
-            Mean accuracy
+    def _score(self, dataset: Dataset) -> float:
         """
+        Computes the accuracy between predicted and real labels.
+
+        Parameters:
+        - dataset: Dataset
+            The dataset containing the features (X) and true labels (y).
+
+        Returns:
+        - accuracy: float
+            The accuracy score of the model.
+        """
+        predictions = self._predict(dataset)
         return accuracy(dataset.y, predictions)
